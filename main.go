@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/howeyc/fsnotify"
-	"github.com/libgit2/git2go"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,41 +15,20 @@ func main() {
 	flag.Parse()
 
 	cancel := trapSignal()
-	repo, err := git.OpenRepository(repositoryPath)
-	defer repo.Free()
+	watcher, err := NewGitWatcher(repositoryPath)
+	defer watcher.Close()
 
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
-
-	headRef, _ := repo.LookupReference("HEAD")
-	ref, _ := headRef.Resolve()
-	previousCommitId := ref.Target()
-
-	ref.Free()
-	headRef.Free()
-
-	watcher, err := fsnotify.NewWatcher()
-	watcher.Watch(repo.Path())
 
 	cancelled := false
 	for !cancelled {
 		select {
-		case event := <-watcher.Event:
-			headRef, _ := repo.LookupReference("HEAD")
-			ref, _ := headRef.Resolve()
-			commit := ref.Target()
-
-			if previousCommitId.Cmp(commit) != 0 {
-				fmt.Println("head changed to " + ref.Target().String())
-				previousCommitId = commit
-			}
-
-			ref.Free()
-			headRef.Free()
-			break
-		case error := <-watcher.Error:
-			fmt.Println(error.Error())
+		case newHeadCommit := <-watcher.HeadChanged:
+			fmt.Println("new head: %v", newHeadCommit.Id())
+		case err := <-watcher.Error:
+			fmt.Println("error: ", err)
 		case cancelled = <-cancel:
 			fmt.Println("cancelled... will exit soon")
 			break
