@@ -37,6 +37,7 @@ func NewGitWatcher(path string) (*GitWatcher, error) {
 		isClosed:    false,
 	}
 
+	go gitWatcher.watchRepository()
 	return gitWatcher, nil
 }
 
