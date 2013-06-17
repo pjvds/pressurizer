@@ -9,57 +9,44 @@ import (
 )
 
 func main() {
-	// cancel channel, writing to this
-	// will signal the monitoring operation
-	// to cancel.
-	cancel := make(chan bool, 1)
-
-	// wire (SIGINT and SIGTERM) to
-	// write to the cancel channel, this allows
-	// the program to react on [ctrl]+[c] key
-	// presses from the console.
-	trapSignal(cancel)
+	cancel := trapSignal()
 
 	run(cancel)
 }
 
-func run(cancel chan (bool)) {
-	monitor(cancel, 1*time.Second, func() {
-		fmt.Println(time.Now)
-	})
+func run(cancel <-chan (bool)) {
+	stop := false
+	for !stop {
+		fmt.Println(time.Now())
+
+		stop = wait(cancel, 1*time.Second)
+	}
 }
 
-func monitor(cancel chan (bool), duration time.Duration, work func()) {
+func wait(cancel <-chan (bool), duration time.Duration) bool {
 	cancelled := false
-	for !cancelled {
-		timeout := time.After(duration)
-		select {
-		case <-cancel:
-			fmt.Printf("quiting from work...")
-			cancelled = true
-		case <-timeout:
-			work()
-		}
+
+	select {
+	case <-cancel:
+		cancelled = true
+	case <-time.After(duration):
 	}
 
-	fmt.Println("exiting prommise...")
+	return cancelled
 }
 
-func work() {
-	fmt.Printf("%v", time.Now)
-}
-
-func trapSignal(cancel chan (bool)) {
+func trapSignal() <-chan (bool) {
 	interrupt_chan := make(chan os.Signal, 2)
+	cancelled := make(chan bool)
 
 	signal.Notify(interrupt_chan, os.Interrupt)
 	signal.Notify(interrupt_chan, syscall.SIGTERM)
 
-	fmt.Println("started... waiting for SIGTERM")
-
 	go func() {
 		sig := <-interrupt_chan
 		fmt.Printf("\nsignal %s received, cancelling...", sig)
-		cancel <- true
+		cancelled <- true
 	}()
+
+	return cancelled
 }
