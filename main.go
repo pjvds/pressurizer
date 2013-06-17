@@ -3,9 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 )
 
@@ -14,7 +11,7 @@ var repositoryPath string = *flag.String("path", ".", "the path of the directory
 func main() {
 	flag.Parse()
 
-	cancel := trapSignal()
+	cancel := TrapInterrupts()
 	watcher, err := NewGitWatcher(repositoryPath)
 	defer watcher.Close()
 
@@ -31,27 +28,16 @@ func main() {
 		case err := <-watcher.Error:
 			fmt.Println("error: ", err)
 
-		case cancelled = <-cancel:
-			fmt.Println("cancelled... will exit soon")
+		case <-time.After(10 * time.Second):
+			fmt.Println("Sorry time is up!")
 
-		case <-time.After(5 * time.Minute):
-			fmt.Println("timed out!!!!!")
+			err := ResetRepository(repositoryPath)
+			if err != nil {
+				fmt.Println("You got lucky, there was an error while ressetting: ", err)
+			}
+
+		case cancelled = <-cancel:
+			fmt.Println("\nBye!")
 		}
 	}
-}
-
-func trapSignal() <-chan (bool) {
-	interrupt_chan := make(chan os.Signal, 2)
-	cancelled := make(chan bool)
-
-	signal.Notify(interrupt_chan, os.Interrupt)
-	signal.Notify(interrupt_chan, syscall.SIGTERM)
-
-	go func() {
-		sig := <-interrupt_chan
-		fmt.Printf("\nsignal %s received, cancelling...", sig)
-		cancelled <- true
-	}()
-
-	return cancelled
 }
