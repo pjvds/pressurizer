@@ -3,55 +3,50 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/howeyc/fsnotify"
 	"github.com/libgit2/git2go"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 )
 
-var path string = *flag.String("path", ".", "the path of the directory that contains the git repository")
+var repositoryPath string = *flag.String("path", ".", "the path of the directory that contains the git repository")
 
 func main() {
 	flag.Parse()
 
 	cancel := trapSignal()
-
-	run(cancel)
-}
-
-func run(cancel <-chan (bool)) {
-	stop := false
-	repo, err := git.OpenRepository(path)
-
+	repo, err := git.OpenRepository(repositoryPath)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	for !stop {
-		head, err := repo.LookupReference("HEAD")
-		ref, err := head.Resolve()
+	headRef, _ := repo.LookupReference("HEAD")
+	ref, _ := headRef.Resolve()
+	fmt.Println(ref.Name())
 
-		if err != nil {
-			fmt.Println(err.Error())
-		} else {
-			fmt.Println(ref.Target())
-		}
+	watcher, err := fsnotify.NewWatcher()
 
-		stop = wait(cancel, 1*time.Second)
-	}
-}
+	watcher.Watch(path.Join(repo.Path(), "HEAD"))
+	watcher.Watch(path.Join(repo.Path(), ref.Name()))
 
-func wait(cancel <-chan (bool), duration time.Duration) bool {
 	cancelled := false
-
-	select {
-	case <-cancel:
-		cancelled = true
-	case <-time.After(duration):
+	for !cancelled {
+		select {
+		case event := <-watcher.Event:
+			fmt.Println(event.String())
+			break
+		case error := <-watcher.Error:
+			fmt.Println(error.Error())
+		case cancelled = <-cancel:
+			fmt.Println("cancelled... will exit soon")
+			break
+		case <-time.After(5 * time.Minute):
+			fmt.Println("timed out!!!!!")
+		}
 	}
-
-	return cancelled
 }
 
 func trapSignal() <-chan (bool) {
