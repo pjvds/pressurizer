@@ -7,7 +7,6 @@ import (
 	"github.com/libgit2/git2go"
 	"os"
 	"os/signal"
-	"path"
 	"syscall"
 	"time"
 )
@@ -19,24 +18,32 @@ func main() {
 
 	cancel := trapSignal()
 	repo, err := git.OpenRepository(repositoryPath)
+	defer repo.Free()
+
 	if err != nil {
 		panic(err.Error())
 	}
 
 	headRef, _ := repo.LookupReference("HEAD")
 	ref, _ := headRef.Resolve()
-	fmt.Println(ref.Name())
+	previousCommitId := ref.Target()
 
 	watcher, err := fsnotify.NewWatcher()
-
-	watcher.Watch(path.Join(repo.Path(), "HEAD"))
-	watcher.Watch(path.Join(repo.Path(), ref.Name()))
+	watcher.Watch(repo.Path())
 
 	cancelled := false
 	for !cancelled {
 		select {
 		case event := <-watcher.Event:
 			fmt.Println(event.String())
+
+			headRef, _ := repo.LookupReference("HEAD")
+			ref, _ := headRef.Resolve()
+			commit := ref.Target()
+
+			if previousCommitId.Cmp(commit) != 0 {
+				fmt.Println("head changed to " + ref.Target().String())
+			}
 			break
 		case error := <-watcher.Error:
 			fmt.Println(error.Error())
