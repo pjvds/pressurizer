@@ -26,12 +26,14 @@ func main() {
 	for !cancelled {
 		select {
 		case newHeadCommit := <-watcher.HeadChanged:
-			fmt.Println("new head: %v", newHeadCommit.Id())
+			fmt.Println("new head: ", newHeadCommit.Id())
+
 		case err := <-watcher.Error:
 			fmt.Println("error: ", err)
+
 		case cancelled = <-cancel:
 			fmt.Println("cancelled... will exit soon")
-			break
+
 		case <-time.After(5 * time.Minute):
 			fmt.Println("timed out!!!!!")
 		}
