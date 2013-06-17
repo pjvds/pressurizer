@@ -28,6 +28,9 @@ func main() {
 	ref, _ := headRef.Resolve()
 	previousCommitId := ref.Target()
 
+	ref.Free()
+	headRef.Free()
+
 	watcher, err := fsnotify.NewWatcher()
 	watcher.Watch(repo.Path())
 
@@ -35,15 +38,17 @@ func main() {
 	for !cancelled {
 		select {
 		case event := <-watcher.Event:
-			fmt.Println(event.String())
-
 			headRef, _ := repo.LookupReference("HEAD")
 			ref, _ := headRef.Resolve()
 			commit := ref.Target()
 
 			if previousCommitId.Cmp(commit) != 0 {
 				fmt.Println("head changed to " + ref.Target().String())
+				previousCommitId = commit
 			}
+
+			ref.Free()
+			headRef.Free()
 			break
 		case error := <-watcher.Error:
 			fmt.Println(error.Error())
