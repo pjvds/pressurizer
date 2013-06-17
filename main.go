@@ -16,7 +16,7 @@ func main() {
 	defer watcher.Close()
 
 	if err != nil {
-		panic(err)
+		panic("unable to watch git repository at '" + repositoryPath + "': " + err.Error())
 	}
 
 	cancelled := false
